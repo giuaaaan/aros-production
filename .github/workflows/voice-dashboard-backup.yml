@@ -1,0 +1,52 @@
+name: Voice Dashboard Backup
+
+on:
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  backup:
+    name: Database Backup
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      
+      - name: Run backup
+        env:
+          SUPABASE_PROJECT_ID: ${{ secrets.VOICE_SUPABASE_PROJECT_ID }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.VOICE_SUPABASE_ACCESS_TOKEN }}
+        run: |
+          mkdir -p backups
+          supabase db dump --project-ref $SUPABASE_PROJECT_ID --file backups/backup_$(date +%Y%m%d_%H%M%S).sql
+      
+      - name: Upload to S3
+        if: env.S3_BUCKET != ''
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          S3_BUCKET: ${{ secrets.VOICE_S3_BACKUP_BUCKET }}
+        run: |
+          aws s3 sync backups/ s3://$S3_BUCKET/backups/ --delete
+      
+      - name: Notify Slack
+        if: always()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ $? -eq 0 ]; then
+            curl -X POST -H 'Content-type: application/json' \
+              --data '{"text":"✅ Voice Dashboard backup completed"}' \
+              $SLACK_WEBHOOK_URL
+          else
+            curl -X POST -H 'Content-type: application/json' \
+              --data '{"text":"❌ Voice Dashboard backup FAILED"}' \
+              $SLACK_WEBHOOK_URL
+          fi

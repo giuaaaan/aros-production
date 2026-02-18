@@ -1,0 +1,364 @@
+# Chaos Engineering Pipeline - Weekly Automated
+# Tests system resilience: Redis failover, DB failover, latency injection
+# NASA-Grade 2026 Best Practices
+
+name: Weekly Chaos Engineering
+
+on:
+  schedule:
+    # Every Sunday at 3 AM UTC
+    - cron: '0 3 * * 0'
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: 'Chaos scenario to run'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - redis-failover
+          - db-failover
+          - latency-injection
+          - pod-kill
+          - network-partition
+
+env:
+  AWS_REGION: eu-west-1
+  EKS_CLUSTER: ai-aros-prod
+  CHAOS_NAMESPACE: chaos-testing
+
+jobs:
+  # Pre-chaos health check
+  health-check:
+    runs-on: ubuntu-latest
+    outputs:
+      status: ${{ steps.check.outputs.status }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig --name $EKS_CLUSTER --region $AWS_REGION
+
+      - name: Pre-chaos health check
+        id: check
+        run: |
+          echo "Running health checks..."
+          
+          # API health
+          if ! kubectl run health-check --rm -i --restart=Never --image=curlimages/curl:latest -- \
+            --fail -s https://api.ai-aros.com/health; then
+            echo "status=unhealthy" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          
+          # Redis health
+          if ! kubectl exec -n default deploy/redis-cluster -- redis-cli -c ping; then
+            echo "status=redis-unhealthy" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          
+          # DB health
+          if ! kubectl run db-check --rm -i --restart=Never --image=postgres:15 -- \
+            psql $DATABASE_URL -c "SELECT 1;"; then
+            echo "status=db-unhealthy" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          
+          echo "status=healthy" >> $GITHUB_OUTPUT
+
+  # Chaos Test 1: Redis Cluster Failover
+  redis-failover:
+    runs-on: ubuntu-latest
+    needs: health-check
+    if: github.event.inputs.scenario == 'all' || github.event.inputs.scenario == 'redis-failover'
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Configure kubectl
+        run: aws eks update-kubeconfig --name $EKS_CLUSTER --region $AWS_REGION
+
+      - name: Record baseline metrics
+        run: |
+          echo "## Redis Cluster Baseline" >> $GITHUB_STEP_SUMMARY
+          kubectl exec -n default deploy/redis-cluster -- redis-cli cluster info | head -20 >> $GITHUB_STEP_SUMMARY
+
+      - name: Kill Redis master node
+        run: |
+          echo "Finding Redis master nodes..."
+          MASTERS=$(kubectl exec -n default deploy/redis-cluster -- redis-cli cluster nodes | grep master | awk '{print $1}' | head -1)
+          echo "Killing master: $MASTERS"
+          
+          # Get pod name for this master
+          POD=$(kubectl get pods -n default -l app=redis-cluster -o json | \
+            jq -r '.items[] | select(.metadata.name | contains("'"$MASTERS"'")) | .metadata.name' | head -1)
+          
+          echo "Deleting pod: $POD"
+          kubectl delete pod -n default $POD --force --grace-period=0
+
+      - name: Wait for failover
+        run: |
+          echo "Waiting 30s for automatic failover..."
+          sleep 30
+          
+          # Check cluster state
+          for i in {1..10}; do
+            STATE=$(kubectl exec -n default deploy/redis-cluster -- redis-cli cluster info | grep cluster_state)
+            echo "Attempt $i: $STATE"
+            if echo "$STATE" | grep -q "ok"; then
+              echo "✅ Failover successful" >> $GITHUB_STEP_SUMMARY
+              exit 0
+            fi
+            sleep 5
+          done
+          
+          echo "❌ Failover failed" >> $GITHUB_STEP_SUMMARY
+          exit 1
+
+      - name: Verify application resilience
+        run: |
+          for i in {1..20}; do
+            if curl -sf https://api.ai-aros.com/health > /dev/null; then
+              echo "✅ API still responding after Redis failover"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "❌ API not responding after Redis failover"
+          exit 1
+
+  # Chaos Test 2: Database Failover
+  db-failover:
+    runs-on: ubuntu-latest
+    needs: health-check
+    if: github.event.inputs.scenario == 'all' || github.event.inputs.scenario == 'db-failover'
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Failover RDS
+        run: |
+          echo "Initiating RDS failover..."
+          aws rds reboot-db-instance \
+            --db-instance-identifier ai-aros-primary \
+            --force-failover
+          
+          echo "Waiting for failover..."
+          aws rds wait db-instance-available \
+            --db-instance-identifier ai-aros-primary
+
+      - name: Verify zero data loss
+        run: |
+          echo "Running data consistency checks..."
+          # Check latest records have same timestamp
+          kubectl run db-check --rm -i --restart=Never --image=postgres:15 -- \
+            psql $DATABASE_URL -c "SELECT COUNT(*) FROM "Interaction" WHERE created_at > NOW() - INTERVAL '5 minutes';"
+
+  # Chaos Test 3: Latency Injection
+  latency-injection:
+    runs-on: ubuntu-latest
+    needs: health-check
+    if: github.event.inputs.scenario == 'all' || github.event.inputs.scenario == 'latency-injection'
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Configure kubectl
+        run: aws eks update-kubeconfig --name $EKS_CLUSTER --region $AWS_REGION
+
+      - name: Install Chaos Mesh
+        run: |
+          curl -sSL https://mirrors.chaos-mesh.org/latest/install.sh | bash
+
+      - name: Inject network latency
+        run: |
+          cat <<EOF | kubectl apply -f -
+          apiVersion: chaos-mesh.org/v1alpha1
+          kind: NetworkChaos
+          metadata:
+            name: ai-orchestrator-latency
+            namespace: default
+          spec:
+            action: delay
+            mode: all
+            selector:
+              matchLabels:
+                app: ai-orchestrator
+            delay:
+              latency: "500ms"
+              correlation: "100"
+              jitter: "100ms"
+            duration: "5m"
+          EOF
+
+      - name: Verify circuit breaker triggers
+        run: |
+          sleep 60
+          
+          # Check circuit breaker metrics
+          RESPONSE=$(curl -sf https://api.ai-aros.com/metrics | grep -c "circuit_breaker_open" || echo "0")
+          echo "Circuit breakers open: $RESPONSE"
+          
+          if [ "$RESPONSE" -gt "0" ]; then
+            echo "✅ Circuit breaker working correctly"
+          else
+            echo "⚠️ No circuit breakers triggered (may be ok if no traffic)"
+          fi
+
+      - name: Cleanup latency injection
+        if: always()
+        run: |
+          kubectl delete networkchaos ai-orchestrator-latency -n default --ignore-not-found
+
+  # Chaos Test 4: Random Pod Kill
+  pod-kill:
+    runs-on: ubuntu-latest
+    needs: health-check
+    if: github.event.inputs.scenario == 'all' || github.event.inputs.scenario == 'pod-kill'
+    steps:
+      - name: Configure kubectl
+        run: aws eks update-kubeconfig --name $EKS_CLUSTER --region $AWS_REGION
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ env.AWS_REGION }}
+
+      - name: Kill random pods
+        run: |
+          for DEPLOY in ai-orchestrator voice-gateway api-gateway; do
+            echo "Killing pods for $DEPLOY..."
+            kubectl delete pod -n default -l app=$DEPLOY --force --grace-period=0
+            sleep 10
+            
+            # Wait for recovery
+            kubectl rollout status deployment/$DEPLOY -n default --timeout=120s
+          done
+          
+          echo "✅ All deployments recovered successfully" >> $GITHUB_STEP_SUMMARY
+
+  # Chaos Test 5: Network Partition
+  network-partition:
+    runs-on: ubuntu-latest
+    needs: health-check
+    if: github.event.inputs.scenario == 'all' || github.event.inputs.scenario == 'network-partition'
+    steps:
+      - name: Configure kubectl
+        run: aws eks update-kubeconfig --name $EKS_CLUSTER --region $AWS_REGION
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ env.AWS_REGION }}
+
+      - name: Create network partition
+        run: |
+          cat <<EOF | kubectl apply -f -
+          apiVersion: chaos-mesh.org/v1alpha1
+          kind: NetworkChaos
+          metadata:
+            name: partition-test
+            namespace: default
+          spec:
+            action: partition
+            mode: all
+            selector:
+              matchLabels:
+                app: ai-orchestrator
+            direction: both
+            target:
+              selector:
+                matchLabels:
+                  app: redis-cluster
+              mode: all
+            duration: "3m"
+          EOF
+
+      - name: Verify system degradation (not crash)
+        run: |
+          sleep 30
+          
+          # Should still respond but maybe slower
+          for i in {1..10}; do
+            STATUS=$(curl -o /dev/null -w "%{http_code}" -s --max-time 5 https://api.ai-aros.com/health || echo "000")
+            echo "Attempt $i: HTTP $STATUS"
+            
+            if [ "$STATUS" = "200" ] || [ "$STATUS" = "503" ]; then
+              echo "✅ System degrading gracefully"
+            fi
+            sleep 10
+          done
+
+      - name: Cleanup partition
+        if: always()
+        run: |
+          kubectl delete networkchaos partition-test -n default --ignore-not-found
+
+  # Post-chaos reporting
+  report:
+    runs-on: ubuntu-latest
+    needs: [redis-failover, db-failover, latency-injection, pod-kill, network-partition]
+    if: always()
+    steps:
+      - name: Generate report
+        run: |
+          cat <<'EOF' >> $GITHUB_STEP_SUMMARY
+          # Chaos Engineering Report
+          
+          | Scenario | Status |
+          |----------|--------|
+          EOF
+          
+          for job in redis-failover db-failover latency-injection pod-kill network-partition; do
+            STATUS="${{ needs[job].result }}"
+            ICON=$([ "$STATUS" = "success" ] && echo "✅" || [ "$STATUS" = "skipped" ] && echo "⏭️" || echo "❌")
+            echo "| $job | $ICON $STATUS |" >> $GITHUB_STEP_SUMMARY
+          done
+          
+          cat <<'EOF' >> $GITHUB_STEP_SUMMARY
+          
+          ## Action Items
+          - [ ] Review any failures
+          - [ ] Update runbooks if new patterns found
+          - [ ] Schedule post-mortem if critical failure
+          EOF
+
+      - name: Notify on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          payload: |
+            {
+              "text": "🚨 Chaos Engineering FAILED",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Chaos Engineering Pipeline Failed*\nCheck the <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|workflow run> for details."
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

@@ -1,0 +1,86 @@
+# Artillery load test configuration
+# Run with: artillery run load-tests/api-load-test.yml
+
+config:
+  target: 'http://localhost:3001'
+  phases:
+    # Warm up phase
+    - duration: 60
+      arrivalRate: 5
+      name: "Warm up"
+    
+    # Ramp up phase
+    - duration: 120
+      arrivalRate: 5
+      rampTo: 50
+      name: "Ramp up"
+    
+    # Sustained load
+    - duration: 300
+      arrivalRate: 50
+      name: "Sustained load"
+    
+    # Spike test
+    - duration: 30
+      arrivalRate: 100
+      name: "Spike test"
+    
+    # Cool down
+    - duration: 60
+      arrivalRate: 5
+      name: "Cool down"
+  
+  defaults:
+    headers:
+      Content-Type: 'application/json'
+  
+  # Thresholds for pass/fail
+  ensure:
+    p99: 1000  # 99th percentile response time < 1s
+    maxErrorRate: 5  # Max 5% error rate
+
+scenarios:
+  # Dashboard stats endpoint
+  - name: "Get Dashboard Stats"
+    weight: 30
+    flow:
+      - get:
+          url: "/api/dashboard/stats"
+          expect:
+            - statusCode: 200
+            - contentType: json
+            - hasProperty: "totalRevenue"
+            - hasProperty: "activeCustomers"
+            - hasProperty: "todayCalls"
+
+  # Activity feed endpoint
+  - name: "Get Activity Feed"
+    weight: 40
+    flow:
+      - get:
+          url: "/api/activity"
+          expect:
+            - statusCode: 200
+            - contentType: json
+
+  # Organizations list endpoint
+  - name: "Get Organizations"
+    weight: 25
+    flow:
+      - get:
+          url: "/api/organizations"
+          expect:
+            - statusCode: 200
+            - contentType: json
+            - hasProperty: "organizations"
+            - hasProperty: "total"
+
+  # Organizations with search
+  - name: "Search Organizations"
+    weight: 5
+    flow:
+      - get:
+          url: "/api/organizations?search=test&status=active"
+          expect:
+            - statusCode: 200
+            - contentType: json

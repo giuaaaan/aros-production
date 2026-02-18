@@ -1,0 +1,32 @@
+{
+  "name": "AROS Voice - Segretaria AI",
+  "short_name": "AROS",
+  "description": "Segretaria AI per officine meccaniche italiane",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#000000",
+  "orientation": "portrait",
+  "scope": "/",
+  "lang": "it",
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "categories": ["business", "productivity"],
+  "shortcuts": [
+    {
+      "name": "Nuovo Appuntamento",
+      "short_name": "Appuntamento",
+      "url": "/dashboard/appointments/new"
+    }
+  ]
+}

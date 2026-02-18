@@ -1,0 +1,56 @@
+# Stress test - Find breaking point
+# Run with: artillery run load-tests/stress-test.yml
+# WARNING: Run this only in staging/test environment
+
+config:
+  target: 'http://localhost:3001'
+  phases:
+    # Gradually increase load until failure
+    - duration: 60
+      arrivalRate: 10
+      name: "Baseline"
+    
+    - duration: 60
+      arrivalRate: 50
+      name: "Moderate load"
+    
+    - duration: 60
+      arrivalRate: 100
+      name: "Heavy load"
+    
+    - duration: 60
+      arrivalRate: 200
+      name: "Very heavy load"
+    
+    - duration: 60
+      arrivalRate: 500
+      name: "Extreme load"
+  
+  ensure:
+    # More lenient thresholds for stress test
+    maxErrorRate: 50  # Allow up to 50% errors during stress
+
+scenarios:
+  - name: "Stress - Dashboard Stats"
+    weight: 25
+    flow:
+      - get:
+          url: "/api/dashboard/stats"
+
+  - name: "Stress - Activity Feed"
+    weight: 35
+    flow:
+      - get:
+          url: "/api/activity"
+
+  - name: "Stress - Organizations"
+    weight: 30
+    flow:
+      - get:
+          url: "/api/organizations"
+
+  - name: "Stress - Organizations Search"
+    weight: 10
+    flow:
+      - get:
+          url: "/api/organizations?search={{ $randomString() }}"

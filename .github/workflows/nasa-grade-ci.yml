@@ -1,0 +1,377 @@
+# AI-AROS NASA-Grade CI/CD Pipeline
+# v3.4.0 - Production Ready
+# 
+# This pipeline implements NASA-grade software quality gates:
+# 1. Static Analysis (SonarQube)
+# 2. Unit Tests (>90% coverage)
+# 3. Integration Tests
+# 4. Security Scan (SAST, SCA)
+# 5. License Compliance
+# 6. Performance Budget
+# 7. Infrastructure Validation (Terraform)
+# 8. Chaos Testing
+# 9. Deployment with Canary
+
+name: NASA-Grade CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  NODE_VERSION: '20'
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────
+  # GATE 1: STATIC ANALYSIS & CODE QUALITY
+  # ─────────────────────────────────────────────────────────────────
+  
+  static-analysis:
+    name: '🔍 Static Analysis'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Required for SonarQube
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type Check
+        run: npm run type-check
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.projectKey=ai-aros
+            -Dsonar.qualitygate.wait=true
+
+  # ─────────────────────────────────────────────────────────────────
+  # GATE 2: UNIT TESTS (>90% COVERAGE)
+  # ─────────────────────────────────────────────────────────────────
+  
+  unit-tests:
+    name: '🧪 Unit Tests'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Unit Tests
+        run: npm run test -- --coverage
+
+      - name: Check Coverage
+        run: |
+          COVERAGE=$(cat coverage/lcov-report/index.html | grep -oP '(?<=<span class="strong">)[^%]+' | head -1)
+          if (( $(echo "$COVERAGE < 90" | bc -l) )); then
+            echo "❌ Coverage $COVERAGE% is below 90% threshold"
+            exit 1
+          fi
+          echo "✅ Coverage $COVERAGE% meets threshold"
+
+      - name: Upload Coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+
+  # ─────────────────────────────────────────────────────────────────
+  # GATE 3: INTEGRATION TESTS
+  # ─────────────────────────────────────────────────────────────────
+  
+  integration-tests:
+    name: '🔗 Integration Tests'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: aiaros_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Database Migrations
+        run: npm run db:deploy
+        env:
+          DATABASE_URL: postgres://test:test@localhost:5432/aiaros_test
+
+      - name: Run Integration Tests
+        run: npm run test:integration
+        env:
+          DATABASE_URL: postgres://test:test@localhost:5432/aiaros_test
+          REDIS_URL: redis://localhost:6379
+
+  # ─────────────────────────────────────────────────────────────────
+  # GATE 4: SECURITY SCANNING
+  # ─────────────────────────────────────────────────────────────────
+  
+  security-sast:
+    name: '🔒 SAST (CodeQL)'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: typescript, javascript
+          queries: security-extended,security-and-quality
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+
+  security-sca:
+    name: '🔒 SCA (Dependency Audit)'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Run npm audit
+        run: npm audit --audit-level=moderate
+        continue-on-error: false
+
+      - name: Run Snyk Security Scan
+        uses: snyk/actions/node@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        continue-on-error: false
+
+  # ─────────────────────────────────────────────────────────────────
+  # GATE 5: LICENSE COMPLIANCE
+  # ─────────────────────────────────────────────────────────────────
+  
+  license-compliance:
+    name: '📜 License Compliance'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check Licenses
+        uses: fossas/fossa-action@main
+        with:
+          api-key: ${{ secrets.FOSSA_API_KEY }}
+
+  # ─────────────────────────────────────────────────────────────────
+  # GATE 6: INFRASTRUCTURE VALIDATION
+  # ─────────────────────────────────────────────────────────────────
+  
+  terraform-validate:
+    name: '🏗️ Terraform Validate'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/terraform
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.0"
+          terraform_wrapper: false
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+
+      - name: Terraform Init
+        run: terraform init -backend=false
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan (Dry Run)
+        run: terraform plan -input=false
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+  # ─────────────────────────────────────────────────────────────────
+  # GATE 7: PERFORMANCE BUDGET
+  # ─────────────────────────────────────────────────────────────────
+  
+  performance-budget:
+    name: '⚡ Performance Budget'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Check Bundle Size
+        run: |
+          BUNDLE_SIZE=$(du -sb dist/apps/api/main.js | cut -f1)
+          MAX_SIZE=209715200 # 200MB
+          if [ $BUNDLE_SIZE -gt $MAX_SIZE ]; then
+            echo "❌ Bundle size $BUNDLE_SIZE bytes exceeds $MAX_SIZE bytes"
+            exit 1
+          fi
+          echo "✅ Bundle size $BUNDLE_SIZE bytes within budget"
+
+  # ─────────────────────────────────────────────────────────────────
+  # DEPLOYMENT (Only on main branch)
+  # ─────────────────────────────────────────────────────────────────
+  
+  deploy-staging:
+    name: '🚀 Deploy to Staging'
+    runs-on: ubuntu-latest
+    needs: [static-analysis, unit-tests, integration-tests, security-sast, terraform-validate]
+    if: github.ref == 'refs/heads/develop'
+    environment:
+      name: staging
+      url: https://api-staging.ai-aros.com
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to Staging
+        run: ./scripts/deploy.sh staging
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+
+  deploy-production:
+    name: '🚀 Deploy to Production (Canary)'
+    runs-on: ubuntu-latest
+    needs: [static-analysis, unit-tests, integration-tests, security-sast, terraform-validate, license-compliance]
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: production
+      url: https://api.ai-aros.com
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy (10% Canary)
+        run: ./scripts/deploy.sh production --canary=10
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Wait for Canary Analysis
+        run: sleep 300 # 5 minutes
+
+      - name: Promote to 50%
+        run: ./scripts/deploy.sh production --canary=50
+
+      - name: Wait for Analysis
+        run: sleep 300
+
+      - name: Full Rollout
+        run: ./scripts/deploy.sh production --canary=100
+
+  # ─────────────────────────────────────────────────────────────────
+  # POST-DEPLOYMENT: CHAOS TESTING
+  # ─────────────────────────────────────────────────────────────────
+  
+  chaos-test:
+    name: '💥 Chaos Testing'
+    runs-on: ubuntu-latest
+    needs: [deploy-production]
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Chaos Tests
+        run: ./scripts/chaos-test.sh
+        env:
+          API_URL: https://api.ai-aros.com
+
+  # ─────────────────────────────────────────────────────────────────
+  # NOTIFICATIONS
+  # ─────────────────────────────────────────────────────────────────
+  
+  notify:
+    name: '📢 Notify Team'
+    runs-on: ubuntu-latest
+    needs: [deploy-production]
+    if: always()
+    steps:
+      - name: Slack Notification
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          channel: '#deployments'
+          fields: repo,message,commit,author,action,eventName,ref,workflow
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

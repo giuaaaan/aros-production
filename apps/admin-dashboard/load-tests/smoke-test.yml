@@ -1,0 +1,42 @@
+# Smoke test - Quick verification that APIs work
+# Run with: artillery run load-tests/smoke-test.yml
+
+config:
+  target: 'http://localhost:3001'
+  phases:
+    - duration: 10
+      arrivalRate: 1
+      name: "Smoke test"
+  
+  ensure:
+    p95: 500
+    maxErrorRate: 0
+
+scenarios:
+  - name: "Smoke - Dashboard Stats"
+    flow:
+      - get:
+          url: "/api/dashboard/stats"
+          expect:
+            - statusCode: 200
+
+  - name: "Smoke - Activity Feed"
+    flow:
+      - get:
+          url: "/api/activity"
+          expect:
+            - statusCode: 200
+
+  - name: "Smoke - Organizations"
+    flow:
+      - get:
+          url: "/api/organizations"
+          expect:
+            - statusCode: 200
+
+  - name: "Smoke - Organizations with filters"
+    flow:
+      - get:
+          url: "/api/organizations?search=test&status=active&tier=professional"
+          expect:
+            - statusCode: 200

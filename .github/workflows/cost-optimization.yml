@@ -1,0 +1,289 @@
+# Cost Optimization Automation
+# Daily analysis, weekly optimization, monthly reporting
+# NASA-Grade 2026 Best Practices
+
+name: Cost Optimization
+
+on:
+  schedule:
+    # Daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+env:
+  AWS_REGION: eu-west-1
+  ALERT_THRESHOLD_DAILY: 500  # €500/day
+  ALERT_THRESHOLD_MONTHLY: 15000  # €15k/month
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    outputs:
+      current_spend: ${{ steps.spend.outputs.daily }}
+      anomaly_detected: ${{ steps.anomaly.outputs.detected }}
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Get current spend
+        id: spend
+        run: |
+          # Get yesterday's cost
+          START=$(date -d 'yesterday' +%Y-%m-%d)
+          END=$(date +%Y-%m-%d)
+          
+          COST=$(aws ce get-cost-and-usage \
+            --time-start $START \
+            --time-end $END \
+            --granularity DAILY \
+            --metrics "BlendedCost" \
+            --query 'ResultsByTime[0].Total.BlendedCost.Amount' \
+            --output text)
+          
+          echo "daily=$COST" >> $GITHUB_OUTPUT
+          echo "Daily AWS spend: €$COST"
+
+      - name: Check for anomalies
+        id: anomaly
+        run: |
+          COST="${{ steps.spend.outputs.daily }}"
+          
+          # Get 30-day average
+          AVG=$(aws ce get-cost-and-usage \
+            --time-start $(date -d '30 days ago' +%Y-%m-%d) \
+            --time-end $(date +%Y-%m-%d) \
+            --granularity DAILY \
+            --metrics "BlendedCost" \
+            --query 'ResultsByTime[*].Total.BlendedCost.Amount' \
+            --output text | tr '\t' '\n' | awk '{sum+=$1} END {print sum/NR}')
+          
+          THRESHOLD=$(echo "$AVG * 1.5" | bc)
+          
+          if (( $(echo "$COST > $THRESHOLD" | bc -l) )); then
+            echo "detected=true" >> $GITHUB_OUTPUT
+            echo "🚨 Cost anomaly detected! Current: €$COST, Average: €$AVG"
+          else
+            echo "detected=false" >> $GITHUB_OUTPUT
+            echo "✅ Costs normal. Current: €$COST, Average: €$AVG"
+          fi
+
+      - name: Alert if over threshold
+        if: steps.spend.outputs.daily > env.ALERT_THRESHOLD_DAILY
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          payload: |
+            {
+              "text": "💰 Daily AWS spend: €${{ steps.spend.outputs.daily }} (threshold: €${{ env.ALERT_THRESHOLD_DAILY }})"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  optimize:
+    runs-on: ubuntu-latest
+    needs: analyze
+    if: github.event.schedule == '0 2 * * 0'  # Weekly on Sunday
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Optimize EKS node groups
+        run: |
+          # Check for underutilized nodes
+          kubectl top nodes | awk 'NR>1 && $3 < 30 {print $1}' | while read node; do
+            echo "Node $node is underutilized (<30% CPU)"
+            # Consider cordoning and draining
+          done
+          
+          # Check for pods without resource limits
+          kubectl get pods --all-namespaces -o json | \
+            jq '.items[] | select(.spec.containers[].resources.limits == null) | .metadata.name' | \
+            wc -l | xargs echo "Pods without limits:"
+
+      - name: Find unused resources
+        run: |
+          # Unattached EBS volumes
+          aws ec2 describe-volumes \
+            --filters Name=status,Values=available \
+            --query 'Volumes[*].[VolumeId,Size,CreateTime]' \
+            --output table
+          
+          # Old snapshots
+          aws ec2 describe-snapshots \
+            --owner-ids self \
+            --query 'Snapshots[?StartTime<`'$(date -d '90 days ago' +%Y-%m-%d)'`].[SnapshotId,StartTime]' \
+            --output table
+          
+          # Unused RDS instances
+          aws rds describe-db-instances \
+            --query 'DBInstances[?DBInstanceStatus==`available`].[DBInstanceIdentifier,InstanceCreateTime]' \
+            --output table
+
+      - name: Rightsizing recommendations
+        run: |
+          # Get Compute Optimizer recommendations
+          aws compute-optimizer get-ec2-instance-recommendations \
+            --query 'instanceRecommendations[*].[instanceArn,finding,recommendationOptions[0].instanceType]' \
+            --output table | head -20
+
+      - name: Purchase Savings Plans if needed
+        run: |
+          # Check current coverage
+          SP_COVERAGE=$(aws ce get-savings-plans-coverage \
+            --time-period Start=$(date -d '7 days ago' +%Y-%m-%d),End=$(date +%Y-%m-%d) \
+            --query 'SavingsPlansCoverages[0].Coverage.CoveragePercentage' \
+            --output text)
+          
+          echo "Savings Plans coverage: $SP_COVERAGE%"
+          
+          if (( $(echo "$SP_COVERAGE < 80" | bc -l) )); then
+            echo "⚠️ Consider purchasing additional Savings Plans"
+          fi
+
+  report:
+    runs-on: ubuntu-latest
+    needs: analyze
+    if: github.event.schedule == '0 2 1 * *'  # Monthly on 1st
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Generate monthly report
+        run: |
+          START=$(date -d '1 month ago' +%Y-%m-01)
+          END=$(date +%Y-%m-01)
+          
+          echo "# AI-AROS Monthly Cost Report" > report.md
+          echo "Period: $START to $END" >> report.md
+          echo "" >> report.md
+          
+          # Top services
+          echo "## Top Services" >> report.md
+          aws ce get-cost-and-usage \
+            --time-start $START \
+            --time-end $END \
+            --granularity MONTHLY \
+            --group-by Type=DIMENSION,Key=SERVICE \
+            --metrics "BlendedCost" \
+            --query 'ResultsByTime[0].Groups[*].[Keys[0],Metrics.BlendedCost.Amount]' \
+            --output table >> report.md
+          
+          # Tag breakdown
+          echo "" >> report.md
+          echo "## By Environment" >> report.md
+          aws ce get-cost-and-usage \
+            --time-start $START \
+            --time-end $END \
+            --granularity MONTHLY \
+            --group-by Type=TAG,Key=Environment \
+            --metrics "BlendedCost" \
+            --query 'ResultsByTime[0].Groups[*].[Keys[0],Metrics.BlendedCost.Amount]' \
+            --output table >> report.md
+
+      - name: Post report
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          payload: |
+            {
+              "text": "📊 Monthly cost report generated",
+              "attachments": [
+                {
+                  "color": "good",
+                  "text": "$(cat report.md)"
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  voice-cost-analysis:
+    runs-on: ubuntu-latest
+    needs: analyze
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Analyze voice costs
+        run: |
+          # Query voice usage from database
+          cat <<'EOF' | psql $DATABASE_URL > voice_report.txt
+          WITH daily_usage AS (
+            SELECT 
+              date_trunc('day', timestamp) as day,
+              "orgId",
+              count(*) as calls,
+              sum(duration) as total_minutes,
+              tier
+            FROM "Interaction"
+            JOIN "Organization" ON "Interaction"."orgId" = "Organization".id
+            WHERE timestamp > NOW() - INTERVAL '7 days'
+            GROUP BY 1, 2, 4
+          )
+          SELECT 
+            day,
+            tier,
+            count(distinct "orgId") as orgs,
+            sum(calls) as total_calls,
+            sum(total_minutes) as minutes,
+            CASE 
+              WHEN tier = 'STARTER' THEN GREATEST(0, sum(total_minutes) - 500 * count(distinct "orgId"))
+              WHEN tier = 'PROFESSIONAL' THEN GREATEST(0, sum(total_minutes) - 1500 * count(distinct "orgId"))
+              WHEN tier = 'ENTERPRISE' THEN GREATEST(0, sum(total_minutes) - 5000 * count(distinct "orgId"))
+            END * 0.10 as estimated_overage
+          FROM daily_usage
+          GROUP BY 1, 2
+          ORDER BY 1 DESC, 2;
+          EOF
+          
+          cat voice_report.txt
+
+      - name: Alert on high overage
+        run: |
+          if grep -q "[5-9][0-9][0-9]\." voice_report.txt; then
+            echo "🚨 High overage detected!"
+            # Notify sales team
+          fi
+
+  auto-optimize:
+    runs-on: ubuntu-latest
+    needs: [analyze, optimize]
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Auto-scale down dev environments
+        run: |
+          # Scale down dev environments during off-hours
+          HOUR=$(date -u +%H)
+          if [ $HOUR -ge 22 ] || [ $HOUR -lt 06 ]; then
+            echo "Scaling down dev environments..."
+            kubectl scale deployment --all --replicas=0 -n dev --selector=app.kubernetes.io/component!=database
+          fi
+
+      - name: Cleanup old builds
+        run: |
+          # Keep only last 30 ECR images
+          aws ecr describe-repositories --query 'repositories[*].repositoryName' --output text | \
+            while read repo; do
+              aws ecr describe-images --repository-name $repo --query 'sort_by(imageDetails,& imagePushedAt)[*].imageDigest' --output text | \
+                tr '\t' '\n' | tail -n +31 | \
+                while read digest; do
+                  aws ecr batch-delete-image --repository-name $repo --image-ids imageDigest=$digest
+                done
+            done
