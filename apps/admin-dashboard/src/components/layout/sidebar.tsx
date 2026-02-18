@@ -11,6 +11,8 @@ import {
   FileText,
   Settings,
   Bot,
+  UserPlus,
+  Shield,
 } from "lucide-react";
 import { UserMenu } from "./user-menu";
 
@@ -18,8 +20,9 @@ const navigation = [
   { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
   { name: "Organizations", href: "/organizations", icon: Building2 },
   { name: "Analytics", href: "/analytics", icon: BarChart3 },
+  { name: "Invites", href: "/invites", icon: UserPlus },
+  { name: "Audit Logs", href: "/audit", icon: Shield },
   { name: "System Health", href: "/system", icon: Activity },
-  { name: "Audit Logs", href: "/logs", icon: FileText },
 ];
 
 interface SidebarProps {

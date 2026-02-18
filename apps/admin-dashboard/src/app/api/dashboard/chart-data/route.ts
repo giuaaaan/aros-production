@@ -34,7 +34,7 @@ export async function GET() {
       const { data: dayOrgs } = await supabase
         .from("organizations")
         .select("subscription_tier")
-        .eq("subscription_status", "active");
+        .eq("subscription_status", "active") as { data: { subscription_tier: string }[] | null };
 
       const tierValues: Record<string, number> = {
         starter: 79,

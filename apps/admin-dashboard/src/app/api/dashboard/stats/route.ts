@@ -8,7 +8,7 @@ export async function GET() {
     // Get total revenue (sum of subscription tiers estimated value)
     const { data: orgs } = await supabase
       .from("organizations")
-      .select("subscription_tier, subscription_status");
+      .select("subscription_tier, subscription_status") as { data: { subscription_tier: string; subscription_status: string }[] | null };
 
     const tierValues: Record<string, number> = {
       starter: 79,

@@ -8,7 +8,9 @@ const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
 const RATE_LIMIT_MAX = 100; // 100 requests per minute
 
 function rateLimit(request: NextRequest): { allowed: boolean; headers: Record<string, string> } {
-  const ip = request.ip ?? 'anonymous';
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 
+             request.headers.get('x-real-ip') ?? 
+             'anonymous';
   const now = Date.now();
   
   const current = rateLimitMap.get(ip);
@@ -112,7 +114,7 @@ export async function middleware(request: NextRequest) {
         getAll() {
           return request.cookies.getAll();
         },
-        setAll(cookiesToSet) {
+        setAll(cookiesToSet: { name: string; value: string; options?: any }[]) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
           supabaseResponse = NextResponse.next({
             request,

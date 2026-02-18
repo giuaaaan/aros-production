@@ -1,0 +1,50 @@
+{
+  "name": "AROS - Full Stack Development",
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "voice-dashboard",
+  "workspaceFolder": "/app",
+  
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "20"
+    },
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+
+  "forwardPorts": [3000, 3001, 5432],
+  "portsAttributes": {
+    "3000": {
+      "label": "Voice Dashboard (Gestionale)",
+      "onAutoForward": "notify"
+    },
+    "3001": {
+      "label": "Admin Dashboard",
+      "onAutoForward": "notify"
+    },
+    "5432": {
+      "label": "PostgreSQL Database",
+      "onAutoForward": "silent"
+    }
+  },
+
+  "postCreateCommand": "npm install -g pnpm && pnpm install",
+  "postStartCommand": "pnpm dev",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "bradlc.vscode-tailwindcss",
+        "esbenp.prettier-vscode",
+        "ms-vscode.vscode-typescript-next",
+        "Prisma.prisma"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  },
+
+  "remoteUser": "root"
+}

@@ -1,0 +1,63 @@
+# AROS - Docker Compose per GitHub Codespaces
+# Avvia PostgreSQL locale + Next.js app
+
+version: '3.8'
+
+services:
+  # Database PostgreSQL
+  postgres:
+    image: postgres:15-alpine
+    container_name: aros-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: aros
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./supabase/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Admin Dashboard (Next.js)
+  admin-dashboard:
+    build:
+      context: ./apps/admin-dashboard
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3000"
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_SUPABASE_URL=http://localhost:5432
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/aros
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./apps/admin-dashboard:/app
+      - /app/node_modules
+
+  # Voice Dashboard (Next.js)
+  voice-dashboard:
+    build:
+      context: ./apps/voice-dashboard
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_SUPABASE_URL=http://localhost:5432
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/aros
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./apps/voice-dashboard:/app
+      - /app/node_modules
+
+volumes:
+  postgres_data:

@@ -76,8 +76,16 @@ export default function SignupPage() {
 
     setLoading(true);
 
+    let supabase;
     try {
-      const supabase = createClient();
+      supabase = createClient();
+    } catch (err: any) {
+      setServerError('Errore di configurazione: ' + err.message);
+      setLoading(false);
+      return;
+    }
+
+    try {
       
       // 1. Sign up with Supabase Auth
       const { data, error: signUpError } = await supabase.auth.signUp({
