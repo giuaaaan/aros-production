@@ -1,0 +1,80 @@
+name: Auto Push Setup
+
+on:
+  workflow_dispatch:
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Files
+        run: |
+          mkdir -p .devcontainer
+          cat > .devcontainer/devcontainer.json << 'EOF'
+          {
+            "name": "AROS Dev",
+            "image": "mcr.microsoft.com/devcontainers/typescript-node:18",
+            "features": {
+              "ghcr.io/devcontainers/features/postgres:1": {
+                "version": "15"
+              }
+            },
+            "postCreateCommand": "npm install -g pnpm && pnpm install",
+            "forwardPorts": [3000, 3001, 5432],
+            "portsAttributes": {
+              "3000": { "label": "Voice Dashboard" },
+              "3001": { "label": "Admin Dashboard" },
+              "5432": { "label": "PostgreSQL" }
+            }
+          }
+          EOF
+          
+          cat > docker-compose.yml << 'EOF'
+          version: '3.8'
+          services:
+            postgres:
+              image: postgres:15-alpine
+              environment:
+                POSTGRES_USER: postgres
+                POSTGRES_PASSWORD: postgres
+                POSTGRES_DB: aros
+              ports:
+                - "5432:5432"
+              volumes:
+                - postgres_data:/var/lib/postgresql/data
+                - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+          
+            voice-dashboard:
+              build: ./apps/voice-dashboard
+              ports:
+                - "3000:3000"
+              environment:
+                - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/aros
+              depends_on:
+                - postgres
+          
+            admin-dashboard:
+              build: ./apps/admin-dashboard
+              ports:
+                - "3001:3001"
+              environment:
+                - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/aros
+              depends_on:
+                - postgres
+          
+          volumes:
+            postgres_data:
+          EOF
+          
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add .
+          git diff --staged --quiet || git commit -m "Add devcontainer and docker-compose"
+          
+      - name: Push changes
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: main
