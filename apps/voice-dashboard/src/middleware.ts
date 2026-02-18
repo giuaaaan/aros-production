@@ -1,9 +1,9 @@
-import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { updateSession } from '@/lib/supabase/middleware';
 
-// Rate limiting
+// Rate limiting in-memory (per production usare Redis)
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
-const RATE_LIMIT_WINDOW = 60 * 1000;
+const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minuto
 const RATE_LIMIT_MAX = 100;
 
 function rateLimit(request: NextRequest) {
@@ -24,32 +24,34 @@ function rateLimit(request: NextRequest) {
   return { allowed: true };
 }
 
-// Security headers
+// Security headers - Best practices 2026
 const securityHeaders = {
   'X-DNS-Prefetch-Control': 'on',
   'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload',
   'X-XSS-Protection': '1; mode=block',
   'X-Frame-Options': 'SAMEORIGIN',
   'X-Content-Type-Options': 'nosniff',
-  'Referrer-Policy': 'origin-when-cross-origin',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
   'Content-Security-Policy': [
     "default-src 'self'",
     "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' blob: data:",
+    "img-src 'self' blob: data: https:",
     "connect-src 'self' https://*.supabase.co https://*.sentry.io",
+    "font-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
   ].join('; '),
 };
 
+// Route configurations
+const PUBLIC_ROUTES = ['/login', '/signup', '/auth/callback', '/api/webhook'];
+const PROTECTED_ROUTES = ['/dashboard', '/gestionale', '/api/consumables', '/api/keys', '/api/time-tracking'];
+
 export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({ request });
-
-  // Apply security headers
-  Object.entries(securityHeaders).forEach(([key, value]) => {
-    response.headers.set(key, value);
-  });
-
-  // Rate limiting for API
+  // 1. Rate limiting per API routes
   if (request.nextUrl.pathname.startsWith('/api/')) {
     const { allowed } = rateLimit(request);
     if (!allowed) {
@@ -60,41 +62,40 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // Supabase auth
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return request.cookies.getAll(); },
-        setAll(cookiesToSet: { name: string; value: string; options?: any }[]) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-          response = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options)
-          );
-        },
-      },
-    }
-  );
-
-  const { data: { user } } = await supabase.auth.getUser();
+  // 2. Update Supabase session + get user
+  const { response, user } = await updateSession(request);
   const { pathname } = request.nextUrl;
 
-  // Public routes
-  if (pathname === '/login' || pathname === '/signup') {
-    if (user) return NextResponse.redirect(new URL('/dashboard', request.url));
+  // 3. Apply security headers
+  Object.entries(securityHeaders).forEach(([key, value]) => {
+    response.headers.set(key, value);
+  });
+
+  // 4. Public routes - allow access
+  const isPublicRoute = PUBLIC_ROUTES.some(route => pathname.startsWith(route));
+  if (isPublicRoute) {
+    // Se autenticato su login/signup, redirect a dashboard
+    if (user && (pathname === '/login' || pathname === '/signup')) {
+      return NextResponse.redirect(new URL('/dashboard', request.url));
+    }
     return response;
   }
 
-  // Protected routes
-  if (!user && pathname.startsWith('/dashboard')) {
-    return NextResponse.redirect(new URL('/login', request.url));
+  // 5. Protected routes - require auth (optimistic check)
+  // NOTA: Questo è solo il primo livello. I Server Components fanno verifica reale.
+  const isProtectedRoute = PROTECTED_ROUTES.some(route => pathname.startsWith(route));
+  if (isProtectedRoute && !user) {
+    const loginUrl = new URL('/login', request.url);
+    loginUrl.searchParams.set('redirect', pathname);
+    return NextResponse.redirect(loginUrl);
   }
 
   return response;
 }
 
+// Matcher ottimizzato
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
 };
