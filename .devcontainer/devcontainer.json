@@ -1,18 +1,15 @@
 {
-  "name": "AROS Fixed",
+  "name": "AROS Auto-Start",
   "image": "mcr.microsoft.com/devcontainers/typescript-node:18",
-  "features": {},
-  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y postgresql-client && docker-compose up -d",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "postCreateCommand": "docker run -d --name postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=aros -p 5432:5432 postgres:15-alpine && sleep 5 && npx pg -h localhost -U postgres -d aros -f init.sql 2>/dev/null || PGPASSWORD=postgres psql -h localhost -U postgres -d aros -f init.sql && echo DATABASE_URL=postgresql://postgres:postgres@localhost:5432/aros > apps/voice-dashboard/.env && echo DATABASE_URL=postgresql://postgres:postgres@localhost:5432/aros > apps/admin-dashboard/.env && pnpm install",
+  "postAttachCommand": "pnpm dev",
   "forwardPorts": [3000, 3001, 5432],
   "portsAttributes": {
-    "3000": {
-      "label": "App (Port 3000)"
-    },
-    "3001": {
-      "label": "App (Port 3001)"
-    },
-    "5432": {
-      "label": "PostgreSQL"
-    }
+    "3000": {"label": "🎙️ Voice Dashboard", "onAutoForward": "openPreview"},
+    "3001": {"label": "🎛️ Admin Dashboard"},
+    "5432": {"label": "🗄️ Database"}
   }
 }
