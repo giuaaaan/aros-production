@@ -5,9 +5,14 @@ import OpenAI from 'openai';
 // WhatsApp Cloud API Webhook Handler
 // 2026 Implementation - Meta Hosted
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+function getOpenAI() {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY not configured");
+  }
+  return new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  });
+}
 
 // Verification endpoint for Meta
 export async function GET(request: NextRequest) {
@@ -189,7 +194,7 @@ Non usare markdown, solo testo semplice.`;
     { role: 'user', content: userMessage },
   ];
 
-  const completion = await openai.chat.completions.create({
+  const completion = await getOpenAI().chat.completions.create({
     model: 'gpt-4o-mini',
     messages: messages as any,
     temperature: 0.7,

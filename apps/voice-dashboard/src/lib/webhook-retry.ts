@@ -19,7 +19,7 @@ export class WebhookRetryManager {
     payload: unknown,
     options: { maxAttempts?: number; delay?: number } = {}
   ): Promise<void> {
-    const supabase = createClient();
+    const supabase = await createClient();
     
     const webhook: WebhookPayload = {
       id: crypto.randomUUID(),
@@ -70,7 +70,7 @@ export class WebhookRetryManager {
   }
 
   private async scheduleRetry(webhook: WebhookPayload): Promise<void> {
-    const supabase = createClient();
+    const supabase = await createClient();
     
     if (webhook.attempts >= webhook.maxAttempts) {
       // Max attempts reached - mark as failed
@@ -101,7 +101,7 @@ export class WebhookRetryManager {
   }
 
   private async markCompleted(id: string): Promise<void> {
-    const supabase = createClient();
+    const supabase = await createClient();
     await supabase
       .from("webhook_queue")
       .update({
@@ -112,7 +112,7 @@ export class WebhookRetryManager {
   }
 
   async processPendingWebhooks(): Promise<void> {
-    const supabase = createClient();
+    const supabase = await createClient();
     
     const { data: pendingWebhooks } = await supabase
       .from("webhook_queue")

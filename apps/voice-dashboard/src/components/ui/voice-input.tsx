@@ -4,6 +4,13 @@ import { useState, useCallback, useEffect } from "react";
 import { Mic, Loader2 } from "lucide-react";
 import { Button } from "./button";
 
+declare global {
+  interface Window {
+    SpeechRecognition: any;
+    webkitSpeechRecognition: any;
+  }
+}
+
 interface VoiceInputProps {
   onTranscript: (text: string) => void;
   placeholder?: string;
@@ -13,7 +20,7 @@ interface VoiceInputProps {
 export function VoiceInput({ onTranscript, placeholder = "Premi il microfono e parla...", className }: VoiceInputProps) {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState("");
-  const [recognition, setRecognition] = useState<SpeechRecognition | null>(null);
+  const [recognition, setRecognition] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -31,7 +38,7 @@ export function VoiceInput({ onTranscript, placeholder = "Premi il microfono e p
     recognizer.interimResults = true;
     recognizer.lang = "it-IT";
     
-    recognizer.onresult = (event: SpeechRecognitionEvent) => {
+    recognizer.onresult = (event: any) => {
       let finalTranscript = "";
       
       for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -47,7 +54,7 @@ export function VoiceInput({ onTranscript, placeholder = "Premi il microfono e p
       }
     };
     
-    recognizer.onerror = (event: SpeechRecognitionErrorEvent) => {
+    recognizer.onerror = (event: any) => {
       setError(`Errore: ${event.error}`);
       setIsListening(false);
     };
@@ -121,7 +128,7 @@ export function VoiceInput({ onTranscript, placeholder = "Premi il microfono e p
 
 declare global {
   interface Window {
-    SpeechRecognition: typeof SpeechRecognition;
-    webkitSpeechRecognition: typeof SpeechRecognition;
+    SpeechRecognition: any;
+    webkitSpeechRecognition: any;
   }
 }

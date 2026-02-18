@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { BrowserMultiFormatReader, IScannerControls, DecodeHintType, BarcodeFormat } from "@zxing/browser";
+import { BrowserMultiFormatReader, IScannerControls, BarcodeFormat } from "@zxing/browser";
+import { DecodeHintType } from "@zxing/library";
 import { Camera, X, Search, Plus, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

@@ -2,16 +2,21 @@ import { NextResponse } from "next/server";
 import webpush from "web-push";
 import { createClient } from "@/lib/supabase/server";
 
-// Configure web-push
-webpush.setVapidDetails(
-  "mailto:support@aiaros.it",
-  process.env.VAPID_PUBLIC_KEY!,
-  process.env.VAPID_PRIVATE_KEY!
-);
+function initWebPush() {
+  if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
+    throw new Error("VAPID keys not configured");
+  }
+  webpush.setVapidDetails(
+    "mailto:support@aiaros.it",
+    process.env.VAPID_PUBLIC_KEY,
+    process.env.VAPID_PRIVATE_KEY
+  );
+}
 
 export async function POST(request: Request) {
   try {
-    const supabase = createClient();
+    initWebPush();
+    const supabase = await createClient();
     const { title, body, userId, data } = await request.json();
     
     // Get user's push subscription

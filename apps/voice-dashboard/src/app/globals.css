@@ -2,21 +2,44 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
-}
-
 @layer base {
   :root {
+    /* AROS Design System - Palette Funzionale */
+    --aros-blue: 217 91% 60%;       /* #2563EB - Primary Actions */
+    --aros-blue-dark: 221 83% 53%;  /* #1D4ED8 - Hover States */
+    --aros-green: 160 84% 39%;      /* #10B981 - Success/Completed */
+    --aros-green-dark: 158 64% 32%; /* #059669 - Success Hover */
+    --aros-orange: 38 92% 50%;      /* #F59E0B - Warning/Pending */
+    --aros-orange-dark: 32 95% 44%; /* #D97706 - Warning Hover */
+    --aros-red: 0 84% 60%;          /* #EF4444 - Critical/Error */
+    --aros-red-dark: 0 72% 51%;     /* #DC2626 - Critical Hover */
+    --aros-purple: 258 90% 66%;     /* #8B5CF6 - AI/Feature */
+    --aros-cyan: 189 94% 43%;       /* #06B6D4 - Info */
+    
+    /* Spacing Base: 4px */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-8: 32px;
+    --space-10: 40px;
+    --space-12: 48px;
+    --space-16: 64px;
+    
+    /* Touch Targets */
+    --touch-min: 48px;
+    --touch-comfortable: 72px;
+    
+    /* Shadcn/UI Theme Variables */
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
     --card: 0 0% 100%;
     --card-foreground: 222.2 84% 4.9%;
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
+    --primary: 217 91% 60%;
     --primary-foreground: 210 40% 98%;
     --secondary: 210 40% 96.1%;
     --secondary-foreground: 222.2 47.4% 11.2%;
@@ -24,12 +47,48 @@
     --muted-foreground: 215.4 16.3% 46.9%;
     --accent: 210 40% 96.1%;
     --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
+    --destructive: 0 84% 60%;
     --destructive-foreground: 210 40% 98%;
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
+    --ring: 217 91% 60%;
     --radius: 0.5rem;
+    
+    /* Success/Warning custom variants */
+    --success: 160 84% 39%;
+    --success-foreground: 210 40% 98%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 210 40% 98%;
+    --info: 189 94% 43%;
+    --info-foreground: 210 40% 98%;
+  }
+
+  /* Dark Mode - Optimized for technicians with dirty hands */
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 8%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 48%;
+    
+    /* Enhanced contrast for dark mode */
+    --success: 160 84% 45%;
+    --warning: 38 92% 55%;
+    --info: 189 94% 50%;
   }
 }
 
@@ -37,7 +96,188 @@
   * {
     @apply border-border;
   }
+  
+  html {
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
   body {
     @apply bg-background text-foreground;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  
+  /* Improved focus states for accessibility */
+  *:focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+}
+
+@layer components {
+  /* AROS Card Component */
+  .aros-card {
+    @apply rounded-xl border bg-card text-card-foreground shadow-sm;
+    @apply transition-shadow duration-200 hover:shadow-md;
+  }
+  
+  /* Status Badges */
+  .aros-badge {
+    @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold;
+  }
+  
+  .aros-badge-critical {
+    @apply bg-red-500/10 text-red-600 border border-red-500/20;
+  }
+  
+  .aros-badge-warning {
+    @apply bg-amber-500/10 text-amber-600 border border-amber-500/20;
+  }
+  
+  .aros-badge-info {
+    @apply bg-blue-500/10 text-blue-600 border border-blue-500/20;
+  }
+  
+  .aros-badge-success {
+    @apply bg-emerald-500/10 text-emerald-600 border border-emerald-500/20;
+  }
+  
+  /* Touch-Optimized Buttons */
+  .aros-btn-touch {
+    @apply min-h-[48px] min-w-[48px] px-4 py-3;
+  }
+  
+  .aros-btn-large {
+    @apply min-h-[72px] min-w-[72px] px-6 py-4 text-base font-semibold;
+  }
+  
+  /* Quick Action Cards */
+  .aros-quick-action {
+    @apply flex flex-col items-center justify-center gap-2;
+    @apply rounded-xl bg-white dark:bg-slate-800;
+    @apply border border-slate-200 dark:border-slate-700;
+    @apply shadow-sm transition-all duration-200;
+    @apply hover:shadow-md hover:border-blue-500/30;
+    @apply active:scale-95;
+    min-height: 88px;
+  }
+  
+  /* Timeline Component */
+  .aros-timeline-item {
+    @apply relative pl-8 pb-6;
+  }
+  
+  .aros-timeline-item::before {
+    content: '';
+    @apply absolute left-[11px] top-2 bottom-0 w-0.5 bg-slate-200 dark:bg-slate-700;
+  }
+  
+  .aros-timeline-item:last-child::before {
+    @apply hidden;
+  }
+  
+  .aros-timeline-dot {
+    @apply absolute left-0 top-1.5 w-6 h-6 rounded-full flex items-center justify-center;
+  }
+  
+  /* Alert System */
+  .aros-alert {
+    @apply flex items-start gap-3 p-4 rounded-lg border;
+  }
+  
+  .aros-alert-critical {
+    @apply bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200;
+  }
+  
+  .aros-alert-warning {
+    @apply bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200;
+  }
+  
+  .aros-alert-info {
+    @apply bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200;
+  }
+  
+  .aros-alert-success {
+    @apply bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200;
+  }
+  
+  /* Navigation Active State */
+  .aros-nav-item {
+    @apply flex items-center gap-3 px-4 py-3 rounded-lg;
+    @apply text-slate-600 dark:text-slate-400;
+    @apply transition-colors duration-200;
+    @apply hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100;
+  }
+  
+  .aros-nav-item-active {
+    @apply bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400;
+    @apply font-medium;
+  }
+  
+  /* KPI Cards */
+  .aros-kpi-card {
+    @apply relative overflow-hidden rounded-xl p-6;
+    @apply bg-white dark:bg-slate-800;
+    @apply border border-slate-200 dark:border-slate-700;
+    @apply shadow-sm transition-all duration-200;
+    @apply hover:shadow-md;
+  }
+  
+  .aros-kpi-trend-up {
+    @apply text-emerald-600 dark:text-emerald-400;
+  }
+  
+  .aros-kpi-trend-down {
+    @apply text-red-600 dark:text-red-400;
+  }
+}
+
+@layer utilities {
+  /* Animation utilities */
+  .animate-in {
+    animation: animateIn 0.2s ease-out;
+  }
+  
+  @keyframes animateIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  /* Reduced motion support */
+  @media (prefers-reduced-motion: reduce) {
+    .animate-in {
+      animation: none;
+    }
+  }
+  
+  /* Safe area for mobile */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+  
+  /* Scrollbar styling */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--muted-foreground) / 0.3);
+    border-radius: 3px;
   }
 }

@@ -2,19 +2,24 @@ import { NextResponse } from "next/server";
 import webpush from "web-push";
 import { createClient } from "@/lib/supabase/server";
 
-const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!;
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY!;
-
-webpush.setVapidDetails(
-  "mailto:admin@aiaros.it",
-  VAPID_PUBLIC_KEY,
-  VAPID_PRIVATE_KEY
-);
+function initWebPush() {
+  const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!;
+  const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY!;
+  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+    throw new Error("VAPID keys not configured");
+  }
+  webpush.setVapidDetails(
+    "mailto:admin@aiaros.it",
+    VAPID_PUBLIC_KEY,
+    VAPID_PRIVATE_KEY
+  );
+}
 
 export async function POST(request: Request) {
   try {
+    initWebPush();
     const { title, body, userId, data } = await request.json();
-    const supabase = createClient();
+    const supabase = await createClient();
     
     const { data: subscriptions } = await supabase
       .from("push_subscriptions")

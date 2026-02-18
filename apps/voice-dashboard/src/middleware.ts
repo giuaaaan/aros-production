@@ -7,7 +7,7 @@ const RATE_LIMIT_WINDOW = 60 * 1000;
 const RATE_LIMIT_MAX = 100;
 
 function rateLimit(request: NextRequest) {
-  const ip = request.ip ?? 'anonymous';
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'anonymous';
   const now = Date.now();
   const current = rateLimitMap.get(ip);
   
@@ -67,7 +67,7 @@ export async function middleware(request: NextRequest) {
     {
       cookies: {
         getAll() { return request.cookies.getAll(); },
-        setAll(cookiesToSet) {
+        setAll(cookiesToSet: { name: string; value: string; options?: any }[]) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
           response = NextResponse.next({ request });
           cookiesToSet.forEach(({ name, value, options }) =>
@@ -82,7 +82,7 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Public routes
-  if (pathname === '/login') {
+  if (pathname === '/login' || pathname === '/signup') {
     if (user) return NextResponse.redirect(new URL('/dashboard', request.url));
     return response;
   }

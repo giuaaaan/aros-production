@@ -7,7 +7,7 @@ const startTime = Date.now();
 
 export async function GET() {
   const checks = {
-    database: { status: "down" as const, latency: 0 },
+    database: { status: "down" as "down" | "up", latency: 0 },
     uptime: { status: "up" as const, seconds: Math.floor((Date.now() - startTime) / 1000) },
   };
 
@@ -16,7 +16,7 @@ export async function GET() {
   // Database check
   const dbStart = Date.now();
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { error } = await supabase.from("organizations").select("count").limit(1);
     
     checks.database.status = error ? "down" : "up";
@@ -37,7 +37,7 @@ export async function GET() {
     checks,
   };
 
-  const statusCode = overallStatus === "healthy" ? 200 : overallStatus === "degraded" ? 200 : 503;
+  const statusCode = overallStatus === "healthy" ? 200 : 503;
 
   return NextResponse.json(response, { 
     status: statusCode,

@@ -18,7 +18,7 @@ const partSchema = z.object({
 // GET /api/parts - Lista ricambi
 export async function GET(request: Request) {
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     
     if (!user) {
@@ -65,7 +65,7 @@ export async function GET(request: Request) {
 // POST /api/parts - Crea nuovo ricambio
 export async function POST(request: Request) {
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     
     if (!user) {

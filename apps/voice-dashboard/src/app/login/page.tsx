@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSupabase } from '@/components/providers/supabase-provider';
 
@@ -9,13 +9,26 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [configError, setConfigError] = useState<string | null>(null);
   const router = useRouter();
   const { supabase } = useSupabase();
+
+  useEffect(() => {
+    if (!supabase) {
+      setConfigError('Supabase non configurato. Verifica le variabili d\'ambiente.');
+    }
+  }, [supabase]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+
+    if (!supabase) {
+      setError('Servizio di autenticazione non disponibile');
+      setLoading(false);
+      return;
+    }
 
     try {
       const { error } = await supabase.auth.signInWithPassword({
@@ -47,6 +60,13 @@ export default function LoginPage() {
         </div>
 
         <form className="mt-8 space-y-6" onSubmit={handleLogin}>
+          {configError && (
+            <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded">
+              <p className="font-medium">Configurazione incompleta</p>
+              <p className="text-sm">{configError}</p>
+            </div>
+          )}
+          
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
               {error}
@@ -83,11 +103,20 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !supabase}
             className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
           >
             {loading ? 'Accesso...' : 'Accedi'}
           </button>
+
+          <div className="text-center mt-4">
+            <p className="text-sm text-gray-600">
+              Non hai un account?{' '}
+              <a href="/signup" className="font-medium text-blue-600 hover:text-blue-500">
+                Registrati qui
+              </a>
+            </p>
+          </div>
         </form>
       </div>
     </div>
