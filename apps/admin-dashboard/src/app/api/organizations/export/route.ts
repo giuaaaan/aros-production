@@ -16,8 +16,7 @@ export async function GET(request: Request) {
         *,
         users:profiles(count),
         appointments:appointments(count)
-      `,
-      { count: "exact" }
+      `
     );
 
     // Apply filters
@@ -40,10 +39,11 @@ export async function GET(request: Request) {
     // Order by created_at desc
     query = query.order("created_at", { ascending: false });
 
-    const { data, error, count } = await query;
+    // No limit for export - fetch all
+    const { data, error } = await query;
 
     if (error) {
-      console.error("Error fetching organizations:", error);
+      console.error("Error fetching organizations for export:", error);
       return NextResponse.json(
         { error: "Failed to fetch organizations" },
         { status: 500 }
@@ -57,9 +57,9 @@ export async function GET(request: Request) {
       appointment_count: org.appointments?.[0]?.count || 0,
     }));
 
-    return NextResponse.json({ organizations, total: count });
+    return NextResponse.json({ organizations });
   } catch (error) {
-    console.error("Error in organizations API:", error);
+    console.error("Error in organizations export API:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

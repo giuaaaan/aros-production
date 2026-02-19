@@ -13,8 +13,15 @@ import {
   Bot,
   UserPlus,
   Shield,
+  Flag,
+  FileBarChart,
+  FlaskConical,
+  UserCog,
+  Palette,
+  Key,
 } from "lucide-react";
 import { UserMenu } from "./user-menu";
+import { CommandPalette } from "@/components/command-palette";
 
 const navigation = [
   { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
@@ -23,6 +30,12 @@ const navigation = [
   { name: "Invites", href: "/invites", icon: UserPlus },
   { name: "Audit Logs", href: "/audit", icon: Shield },
   { name: "System Health", href: "/system", icon: Activity },
+  { name: "Feature Flags", href: "/feature-flags", icon: Flag },
+  { name: "Reports", href: "/reports", icon: FileBarChart },
+  { name: "A/B Testing", href: "/experiments", icon: FlaskConical },
+  { name: "Roles", href: "/roles", icon: UserCog },
+  { name: "Branding", href: "/branding", icon: Palette },
+  { name: "API Keys", href: "/api-keys", icon: Key },
 ];
 
 interface SidebarProps {
@@ -43,6 +56,11 @@ export function Sidebar({ className }: SidebarProps) {
           <h1 className="font-bold text-lg leading-none">AROS</h1>
           <p className="text-xs text-muted-foreground">Admin Console</p>
         </div>
+      </div>
+
+      {/* Search */}
+      <div className="px-4 py-3 border-b">
+        <CommandPalette className="w-full justify-between" />
       </div>
 
       {/* Navigation */}

@@ -4,7 +4,10 @@ export interface Organization {
   slug: string;
   phone_number: string | null;
   whatsapp_number: string | null;
+  email: string | null;
+  address: string | null;
   city: string | null;
+  postal_code: string | null;
   subscription_tier: 'starter' | 'professional' | 'enterprise';
   subscription_status: 'active' | 'paused' | 'cancelled';
   created_at: string;

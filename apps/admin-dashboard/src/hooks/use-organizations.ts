@@ -7,6 +7,7 @@ interface UseOrganizationsOptions {
   search?: string;
   status?: string;
   tier?: string;
+  city?: string;
 }
 
 interface OrganizationsData {
@@ -17,7 +18,7 @@ interface OrganizationsData {
 }
 
 export function useOrganizations(options: UseOrganizationsOptions = {}): OrganizationsData {
-  const { search = "", status = "all", tier = "all" } = options;
+  const { search = "", status = "all", tier = "all", city = "" } = options;
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -32,6 +33,7 @@ export function useOrganizations(options: UseOrganizationsOptions = {}): Organiz
         if (search) params.set("search", search);
         if (status !== "all") params.set("status", status);
         if (tier !== "all") params.set("tier", tier);
+        if (city) params.set("city", city);
 
         const res = await fetch(`/api/organizations?${params.toString()}`);
 
@@ -50,7 +52,7 @@ export function useOrganizations(options: UseOrganizationsOptions = {}): Organiz
     }
 
     fetchOrganizations();
-  }, [search, status, tier]);
+  }, [search, status, tier, city]);
 
   return { organizations, total, loading, error };
 }

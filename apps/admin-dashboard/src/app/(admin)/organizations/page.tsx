@@ -3,12 +3,13 @@
 import { useState } from "react";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, Plus, MoreHorizontal } from "lucide-react";
+import { Plus, MoreHorizontal } from "lucide-react";
 import { useOrganizations } from "@/hooks/use-organizations";
+import { OrganizationFiltersPanel, OrganizationFilters } from "@/components/organizations/filters";
+import { ExportButton, ExportAllButton } from "@/components/organizations/export-button";
 
 const tierColors: Record<string, string> = {
   starter: "bg-gray-500/10 text-gray-500",
@@ -23,8 +24,19 @@ const statusColors: Record<string, string> = {
 };
 
 export default function OrganizationsPage() {
-  const [search, setSearch] = useState("");
-  const { organizations, total, loading, error } = useOrganizations({ search });
+  const [filters, setFilters] = useState<OrganizationFilters>({
+    search: "",
+    status: "all",
+    tier: "all",
+    city: "",
+  });
+
+  const { organizations, total, loading, error } = useOrganizations({
+    search: filters.search,
+    status: filters.status,
+    tier: filters.tier,
+    city: filters.city,
+  });
 
   if (error) {
     return (
@@ -46,21 +58,38 @@ export default function OrganizationsPage() {
         description="Manage your customer organizations"
       />
       <div className="p-6 space-y-6">
+        {/* Filters */}
+        <OrganizationFiltersPanel
+          filters={filters}
+          onChange={setFilters}
+        />
+
         {/* Actions Bar */}
-        <div className="flex items-center justify-between">
-          <div className="relative w-96">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Search organizations..."
-              className="pl-9"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="text-sm text-muted-foreground">
+            {!loading && (
+              <span>
+                Showing <strong>{organizations.length}</strong> of{" "}
+                <strong>{total}</strong> organizations
+              </span>
+            )}
           </div>
-          <Button className="gap-2">
-            <Plus className="w-4 h-4" />
-            Add Organization
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* Export Buttons */}
+            <ExportButton
+              organizations={organizations}
+              filters={filters}
+              disabled={loading}
+            />
+            <ExportAllButton
+              filters={filters}
+              totalCount={total}
+            />
+            <Button className="gap-2">
+              <Plus className="w-4 h-4" />
+              Add Organization
+            </Button>
+          </div>
         </div>
 
         {/* Table */}
@@ -89,6 +118,11 @@ export default function OrganizationsPage() {
                   <TableRow>
                     <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                       No organizations found
+                      {(filters.search || filters.status !== "all" || filters.tier !== "all" || filters.city) && (
+                        <span className="block mt-1">
+                          Try adjusting your filters
+                        </span>
+                      )}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -125,13 +159,6 @@ export default function OrganizationsPage() {
             </Table>
           )}
         </div>
-
-        {/* Total count */}
-        {!loading && (
-          <p className="text-sm text-muted-foreground">
-            Showing {organizations.length} of {total} organizations
-          </p>
-        )}
       </div>
     </div>
   );

@@ -149,6 +149,337 @@ npm run dev
 # http://localhost:3001
 ```
 
+## ⌨️ Command Palette
+
+Press `Cmd+K` (Mac) or `Ctrl+K` (Windows/Linux) to open the command palette for quick navigation.
+
+### Available Commands
+
+| Section | Command | Shortcut | Description |
+|---------|---------|----------|-------------|
+| Navigation | Dashboard Overview | `G D` | Go to dashboard |
+| Navigation | Organizations | `G O` | Manage organizations |
+| Navigation | Analytics | `G A` | View analytics |
+| Navigation | Invites | `G I` | Manage invites |
+| Navigation | Audit Logs | `G L` | View audit logs |
+| Navigation | System Health | `G S` | Check system status |
+| Navigation | Settings | `G ,` | Open settings |
+| Actions | Toggle Theme | `T` | Switch light/dark mode |
+| Actions | New Organization | `N O` | Create organization |
+| Actions | New Invite | `N I` | Send new invite |
+
+## 🔍 Advanced Filtering
+
+The Organizations page features an advanced filtering system:
+
+### Available Filters
+
+| Filter | Options | Description |
+|--------|---------|-------------|
+| Search | Free text | Search by organization name or phone |
+| Status | All, Active, Paused, Cancelled | Filter by subscription status |
+| Plan | All, Starter, Professional, Enterprise | Filter by subscription tier |
+| City | Free text | Filter by location/city |
+
+### Filter Features
+
+- **Real-time updates**: Results update instantly as you type
+- **Active filter pills**: Visual indicators of active filters with quick-remove
+- **Clear all**: One-click reset of all filters
+- **Filter count**: Badge showing number of active filters
+- **Empty state**: Helpful message when no results match filters
+
+## 📤 Data Export
+
+The Organizations page supports exporting data to CSV format:
+
+### Export Options
+
+| Button | Description | Use Case |
+|--------|-------------|----------|
+| **Export CSV** | Export currently displayed organizations | Quick export of filtered results |
+| **Export All** | Export all organizations matching filters | Full dataset export |
+
+### CSV Columns
+
+- ID
+- Name
+- Phone Number
+- Email
+- Address
+- City
+- Postal Code
+- Plan (subscription tier)
+- Status (subscription status)
+- Users (count)
+- Appointments (count)
+- Created At
+- Updated At
+
+### Features
+
+- **Filename**: Auto-generated with filters and date (e.g., `organizations-active-enterprise-2026-02-19.csv`)
+- **CSV escaping**: Properly handles commas, quotes, and newlines
+- **UTF-8 encoding**: Supports special characters (Italian accents, etc.)
+- **Filtered export**: Respects active filters
+- **Large datasets**: Export All fetches complete dataset via API
+
+## 🚩 Feature Flags
+
+The admin dashboard includes a feature flag system for controlling feature rollouts:
+
+### Feature Flags Page
+
+Navigate to **Feature Flags** in the sidebar to manage feature toggles:
+
+| Column | Description |
+|--------|-------------|
+| **Feature** | Name, key, and description of the flag |
+| **Scope** | Global (all orgs) or Organization-specific |
+| **Status** | Enabled or Disabled |
+| **Actions** | Toggle, Edit, Delete |
+
+### Using Feature Flags in Code
+
+```typescript
+import { useFeatureFlag } from "@/hooks/use-feature-flags";
+
+function MyComponent() {
+  const isNewDashboardEnabled = useFeatureFlag("new-dashboard");
+  
+  return isNewDashboardEnabled ? <NewDashboard /> : <OldDashboard />;
+}
+```
+
+### API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/feature-flags` | List all flags |
+| POST | `/api/feature-flags` | Create new flag |
+| PATCH | `/api/feature-flags/[id]` | Update flag |
+| DELETE | `/api/feature-flags/[id]` | Delete flag |
+
+### Database Schema
+
+```sql
+create table feature_flags (
+  id uuid primary key default gen_random_uuid(),
+  key text unique not null,
+  name text not null,
+  description text,
+  enabled boolean default false,
+  scope text default 'global',
+  organization_id uuid references organizations(id),
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+```
+
+## 📊 Custom Reports
+
+Generate and export custom analytics reports from the admin dashboard:
+
+### Available Reports
+
+| Report | Description | Data Source |
+|--------|-------------|-------------|
+| **Organizations Summary** | Overview with key metrics | organizations table |
+| **Subscription Analytics** | Breakdown by tier and status | organizations table |
+| **Growth Report** | New organizations over time | organizations table |
+| **Appointment Analytics** | Booking trends and stats | appointments table |
+| **System Usage** | Platform usage metrics | audit_logs table |
+
+### Report Features
+
+- **Date Range Selection**: 7 days, 30 days, 90 days, 1 year, or all time
+- **Summary Stats**: Key metrics at a glance
+- **Data Tables**: Detailed breakdowns
+- **Export CSV**: Download reports for further analysis
+
+### Report API
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/reports/[type]?range=[range]` | Generate report |
+
+Report types: `organizations-summary`, `subscription-analytics`, `growth-report`, `appointment-analytics`, `system-usage`
+
+## 🧪 A/B Testing
+
+Run experiments and optimize conversion rates with the A/B testing dashboard:
+
+### Features
+
+- **Experiment Management**: Create, run, pause, and complete experiments
+- **Variant Comparison**: Compare two variants with real-time statistics
+- **Conversion Tracking**: Track traffic, conversions, and conversion rates
+- **Statistical Significance**: Calculate uplift and statistical significance
+- **Winner Declaration**: Mark winning variants for implementation
+
+### Experiment Status
+
+| Status | Description | Actions |
+|--------|-------------|---------|
+| **Draft** | Not yet started | Start experiment |
+| **Running** | Active and collecting data | Pause |
+| **Paused** | Temporarily stopped | Resume |
+| **Completed** | Finished with winner selected | View analysis |
+
+### Metrics Tracked
+
+| Metric | Description |
+|--------|-------------|
+| **Traffic** | Number of visitors per variant |
+| **Conversions** | Number of successful conversions |
+| **Conv. Rate** | Conversion percentage |
+| **Uplift** | Relative improvement of variant B vs A |
+| **Significance** | Statistical confidence level |
+
+## 🔐 Advanced RBAC
+
+Role-Based Access Control (RBAC) system for managing admin user permissions:
+
+### Features
+
+- **Role Management**: Create, edit, and delete custom roles
+- **Permission System**: Granular permissions for all resources
+- **System Roles**: Built-in roles (Super Admin, Admin, Support) that cannot be deleted
+- **User Assignment**: Assign roles to users
+
+### Default Roles
+
+| Role | Description | Permissions |
+|------|-------------|-------------|
+| **Super Admin** | Full system access | All permissions |
+| **Admin** | Manage organizations and users | Read/Write on most resources |
+| **Support** | View-only access | Read permissions only |
+
+### Available Permissions
+
+Permissions are organized by resource:
+
+| Resource | Actions |
+|----------|---------|
+| Organizations | Read, Create, Update, Delete |
+| Users | Read, Create, Update, Delete |
+| Analytics | Read |
+| Reports | Read, Export |
+| System | Read, Manage |
+| Feature Flags | Read, Write |
+| Experiments | Read, Write |
+| Audit Logs | Read |
+| Roles | Read, Write |
+
+### Interface
+
+- **Roles Tab**: View and manage all roles
+- **Permissions Tab**: Browse all available permissions
+- **User Assignments Tab**: Manage user-role assignments
+
+## 🎨 White-Label Branding
+
+Customize the look and feel of your admin dashboard:
+
+### Customization Options
+
+| Category | Options |
+|----------|---------|
+| **General** | App name, tagline, favicon, "Powered By" toggle |
+| **Colors** | Primary, secondary, accent, background colors |
+| **Logo** | Custom logo URL, dimensions |
+| **Typography** | Font family, base font size |
+| **Layout** | Sidebar width, border radius |
+| **Advanced** | Custom CSS injection |
+
+### Preview Mode
+
+Real-time preview of all branding changes before saving.
+
+### Default Branding
+
+| Setting | Default Value |
+|---------|---------------|
+| App Name | AROS |
+| Tagline | Admin Console |
+| Primary Color | #22C55E (Green) |
+| Secondary Color | #3B82F6 (Blue) |
+| Accent Color | #F59E0B (Amber) |
+| Background | #0A0A0A (Dark) |
+| Font | Inter |
+| Border Radius | 8px (0.5rem) |
+
+## 🔑 API Access Management
+
+Manage API keys and access tokens for programmatic access:
+
+### Features
+
+- **API Key Generation**: Create new API keys with custom scopes
+- **Key Management**: View, revoke, and rotate keys
+- **Usage Tracking**: Monitor API calls and rate limits
+- **Scoped Access**: Granular permissions per key
+- **Expiration**: Set expiration dates for enhanced security
+
+### Key Statuses
+
+| Status | Description | Action |
+|--------|-------------|--------|
+| **Active** | Key is valid and can be used | Revoke if needed |
+| **Revoked** | Key has been manually disabled | Delete |
+| **Expired** | Key passed its expiration date | Renew or delete |
+
+### Available Scopes
+
+| Scope | Access |
+|-------|--------|
+| `read:organizations` | View organization data |
+| `write:organizations` | Modify organizations |
+| `read:users` | View users |
+| `write:users` | Modify users |
+| `read:analytics` | Access analytics |
+| `read:appointments` | View appointments |
+| `write:appointments` | Modify appointments |
+| `read:system` | View system status |
+| `admin` | Full access |
+
+### Security Best Practices
+
+- Rotate keys every 90 days
+- Use separate keys for production and staging
+- Grant minimum required scopes
+- Monitor usage for anomalies
+- Revoke unused keys immediately
+
+---
+
+## 📱 Mobile Responsive
+
+The admin dashboard is fully responsive and optimized for mobile devices:
+
+### Mobile Layout
+
+- **Header**: Sticky top header with hamburger menu and quick search
+- **Sidebar Drawer**: Slide-out navigation menu on mobile
+- **Touch-friendly**: All interactive elements are at least 44px for easy tapping
+- **Optimized spacing**: Comfortable padding and margins for mobile screens
+
+### Mobile Navigation
+
+| Feature | Desktop | Mobile |
+|---------|---------|--------|
+| Sidebar | Always visible | Slide-out drawer |
+| Navigation | Left sidebar | Hamburger menu |
+| Search | In sidebar | In header |
+| Command Palette | `Cmd+K` / `Ctrl+K` | Button in header + floating button |
+
+### Breakpoints
+
+| Breakpoint | Width | Layout |
+|------------|-------|--------|
+| Mobile | < 1024px | Single column, drawer nav |
+| Desktop | ≥ 1024px | Sidebar + main content |
+
 ---
 
 ## 📁 File Structure
@@ -274,22 +605,22 @@ Le API route admin usano `SUPABASE_SERVICE_ROLE_KEY` per:
 - [x] Connection status indicator
 
 ### v1.1
-- [ ] Real-time Supabase subscriptions
-- [ ] Command palette (Cmd+K)
-- [ ] Advanced filtering
-- [ ] Export dati
+- [x] Real-time Supabase subscriptions
+- [x] Command palette (Cmd+K)
+- [x] Advanced filtering
+- [x] Export dati
 
 ### v1.2
-- [ ] Feature flags
-- [ ] A/B testing dashboard
-- [ ] Custom reports
-- [ ] Mobile responsive (sidebar collapse)
+- [x] Feature flags
+- [x] A/B testing dashboard
+- [x] Custom reports
+- [x] Mobile responsive (sidebar collapse)
 
 ### v2.0
 - [ ] Multi-region support
-- [ ] Advanced RBAC
-- [ ] White-label customization
-- [ ] API access management
+- [x] Advanced RBAC
+- [x] White-label customization
+- [x] API access management
 
 ---
 
